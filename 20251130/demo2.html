@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>地理位置測試</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      max-width: 400px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background: #4caf50;
+      color: #fff;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #43a047;
+    }
+    .label {
+      font-weight: bold;
+      margin-top: 10px;
+      display: block;
+    }
+    .value {
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: 14px;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>地理位置資訊</h2>
+    <p>點擊下方按鈕取得目前位置（緯度、經度、精度）。</p>
+
+    <button id="getLocationBtn">取得目前位置</button>
+
+    <div>
+      <span class="label">緯度：</span>
+      <span id="lat" class="value">--</span>
+    </div>
+    <div>
+      <span class="label">經度：</span>
+      <span id="lon" class="value">--</span>
+    </div>
+    <div>
+      <span class="label">精度（公尺）：</span>
+      <span id="accuracy" class="value">--</span>
+    </div>
+
+    <div id="status">尚未取得位置</div>
+  </div>
+
+  <script>
+    const btn = document.getElementById("getLocationBtn");
+    const latEl = document.getElementById("lat");
+    const lonEl = document.getElementById("lon");
+    const accEl = document.getElementById("accuracy");
+    const statusEl = document.getElementById("status");
+
+    // 檢查瀏覽器是否支援 geolocation
+    if (!("geolocation" in navigator)) {
+      statusEl.textContent = "此瀏覽器不支援地理位置服務";
+      btn.disabled = true;
+    }
+
+    btn.addEventListener("click", () => {
+      if (!("geolocation" in navigator)) return;
+
+      statusEl.textContent = "正在取得位置...";
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const coords = position.coords;
+
+          // 顯示在畫面上
+          latEl.textContent = coords.latitude;
+          lonEl.textContent = coords.longitude;
+          accEl.textContent = coords.accuracy;
+
+          // 也輸出到 console
+          console.log("緯度:", coords.latitude);
+          console.log("經度:", coords.longitude);
+          console.log("精度:", coords.accuracy, "公尺");
+
+          statusEl.textContent = "位置取得成功";
+        },
+        (error) => {
+          console.error("位置取得失敗:", error);
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              statusEl.textContent = "使用者拒絕提供位置權限";
+              break;
+            case error.POSITION_UNAVAILABLE:
+              statusEl.textContent = "無法取得位置資訊";
+              break;
+            case error.TIMEOUT:
+              statusEl.textContent = "取得位置逾時";
+              break;
+            default:
+              statusEl.textContent = "未知錯誤";
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        }
+      );
+    });
+  </script>
+</body>
+</html>
