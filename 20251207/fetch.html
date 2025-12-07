@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <h1>Fetch demo</h1>
+    <button onclick="f_test()">取得 GitHub Commit 資料</button>
+    <div class="json-output">
+        <h3>JSON 資料格式</h3>
+        <pre id="jsonOutput"></pre>
+    </div>
+    <script>
+        async function f_test() {
+            const jsonOutput = document.getElementById('jsonOutput');
+            jsonOutput.textContent = '資料載入中...';
+            let url = 'https://api.github.com/repos/imburgess/MbCn/commits';     
+            
+            
+            try{
+                let response = await fetch(url);
+                let commits = await response.json();
+                jsonOutput.textContent = JSON.stringify(commits[0],null,2);
+            } catch (error){
+                jsonOutput.textContent = "資料取得失敗";
+
+            }
+        }
+    </script>
+</body>
+</html>
