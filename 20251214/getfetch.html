@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fetch</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            background: #fff;
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            width: 100%;
+            max-width: 480px;
+            transition: transform 0.3s ease;
+        }
+        
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        h1 {
+            text-align: center;
+            color: #1a1a1a;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        h3 {
+            margin-bottom: 1.2rem;
+            color: #4a5568;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 0.8rem;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        input[type="text"] {
+            padding: 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 1rem;
+            background-color: #f8fafc;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4299e1;
+            background-color: #fff;
+            box-shadow: 0 0 0 4px rgba(66, 153, 225, 0.15);
+        }
+
+        input[type="submit"] {
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-top: 0.5rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(118, 75, 162, 0.2);
+        }
+
+        input[type="submit"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(118, 75, 162, 0.3);
+        }
+        
+        input[type="submit"]:active {
+            transform: scale(0.98);
+        }
+
+        .json-output {
+            margin-top: 1.5rem;
+        }
+
+        #jsonOutput {
+            background-color: #1a202c;
+            color: #48bb78;
+            padding: 1.2rem;
+            border-radius: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            min-height: 50px;
+            margin-top: 1rem;
+            border: 1px solid #2d3748;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fetch GET Demo</h1>
+        <div class="json-output">
+            <h3>JSON 資料格式</h3>
+            <form id="formElem">
+                <input type="text" name="name" value="John" placeholder="Name">
+                <input type="text" name="surname" value="Smith" placeholder="Surname">
+                <input type="text" name="age" value="15" placeholder="Age">
+                <input type="submit" value="Submit">
+            </form>
+            <pre id="jsonOutput"></pre>
+        </div>
+    </div>
+
+    <script>
+  const formElem = document.getElementById("formElem");
+  const out = document.getElementById("jsonOutput");
+
+  formElem.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const submitBtn = formElem.querySelector('input[type="submit"]');
+    const originalValue = submitBtn.value;
+    submitBtn.disabled = true;
+    submitBtn.value = "Sending...";
+
+    try {
+      const formData = new FormData(formElem);
+      const params = new URLSearchParams(formData);
+      const url = "https://httpbin.org/get?" + params.toString();
+
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const result = await response.json();
+      out.textContent = JSON.stringify(result, null, 2);
+      out.style.color = "#48bb78";
+    } catch (err) {
+      out.textContent = "Error: " + err.message;
+      out.style.color = "#e53e3e";
+      console.error(err);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.value = originalValue;
+    }
+  });
+</script>
+
+</body>
+</html>
