@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Camera & Mic Demo</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; padding: 16px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    video { width: 480px; max-width: 100%; background: #111; border-radius: 12px; }
+    select, button { padding: 8px 10px; }
+    #status { white-space: pre; background: #f6f6f6; padding: 10px; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <button id="startBtn">啟用相機與麥克風</button>
+    <button id="stopBtn" disabled>停止</button>
+  </div>
+
+  <div class="row">
+    <label>攝影機：</label>
+    <select id="videoSelect" disabled></select>
+
+    <label>麥克風：</label>
+    <select id="audioSelect" disabled></select>
+  </div>
+
+  <video id="video" autoplay playsinline muted></video>
+  <div id="status"></div>
+
+  <script>
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const videoEl = document.getElementById("video");
+    const statusEl = document.getElementById("status");
+    const videoSelect = document.getElementById("videoSelect");
+    const audioSelect = document.getElementById("audioSelect");
+
+    let currentStream = null;
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function stopStream() {
+      if (!currentStream) return;
+      currentStream.getTracks().forEach(t => t.stop());
+      currentStream = null;
+      videoEl.srcObject = null;
+      stopBtn.disabled = true;
+      setStatus("已停止串流");
+    }
+
+    async function getDevices() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videos = devices.filter(d => d.kind === "videoinput");
+      const audios = devices.filter(d => d.kind === "audioinput");
+      return { videos, audios };
+    }
+
+    function fillSelect(selectEl, items, selectedId) {
+      selectEl.innerHTML = "";
+      for (const d of items) {
+        const opt = document.createElement("option");
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `(${d.kind}) ${d.deviceId.slice(0, 6)}...`;
+        if (d.deviceId === selectedId) opt.selected = true;
+        selectEl.appendChild(opt);
+      }
+    }
+
+    async function startStream() {
+      // 如果已有串流，先停掉避免累積
+      stopStream();
+
+      const videoDeviceId = videoSelect.value || undefined;
+      const audioDeviceId = audioSelect.value || undefined;
+
+      try {
+        const constraints = {
+          video: videoDeviceId ? { deviceId: { exact: videoDeviceId } } : true,
+          audio: audioDeviceId ? { deviceId: { exact: audioDeviceId } } : true
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+        videoEl.srcObject = stream;
+
+        stopBtn.disabled = false;
+
+        const vTrack = stream.getVideoTracks()[0];
+        const aTrack = stream.getAudioTracks()[0];
+
+        setStatus(
+          `已啟用\n` +
+          `Video: ${vTrack ? (vTrack.label || "OK") : "none"}\n` +
+          `Audio: ${aTrack ? (aTrack.label || "OK") : "none"}\n` +
+          `Tracks: ${stream.getTracks().map(t => `${t.kind}:${t.readyState}`).join(", ")}`
+        );
+
+        // 取得權限後，才拿得到 device label，這時再刷新下拉選單
+        const { videos, audios } = await getDevices();
+        videoSelect.disabled = videos.length === 0;
+        audioSelect.disabled = audios.length === 0;
+
+        fillSelect(videoSelect, videos, vTrack?.getSettings().deviceId);
+        fillSelect(audioSelect, audios, aTrack?.getSettings().deviceId);
+
+      } catch (err) {
+        console.error(err);
+
+        // 常見錯誤：NotAllowedError(拒絕)、NotFoundError(找不到裝置)、NotReadableError(被占用)
+        setStatus(`啟用失敗：${err.name}\n${err.message || ""}`);
+        alert("無法取得相機或麥克風權限，或裝置不可用");
+      }
+    }
+
+    startBtn.addEventListener("click", startStream);
+    stopBtn.addEventListener("click", stopStream);
+
+    // 切換裝置後重啟串流
+    videoSelect.addEventListener("change", () => currentStream && startStream());
+    audioSelect.addEventListener("change", () => currentStream && startStream());
+
+    // 偵測裝置插拔（可選）
+    navigator.mediaDevices?.addEventListener?.("devicechange", async () => {
+      if (!currentStream) return;
+      const { videos, audios } = await getDevices();
+      fillSelect(videoSelect, videos, videoSelect.value);
+      fillSelect(audioSelect, audios, audioSelect.value);
+      setStatus(statusEl.textContent + "\n(偵測到裝置變更)");
+    });
+
+    setStatus("尚未啟用。請按「啟用相機與麥克風」");
+  </script>
+</body>
+</html>
