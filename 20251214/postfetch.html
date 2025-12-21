@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fetch</title>
+    <style>
+        /* Modern Reset & Base Styles */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        /* Card Container */
+        .container {
+            background: #fff;
+            padding: 2.5rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            width: 100%;
+            max-width: 480px;
+            transition: transform 0.3s ease;
+        }
+        
+        .container:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Typography */
+        h1 {
+            text-align: center;
+            color: #1a1a1a;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        h3 {
+            margin-bottom: 1.2rem;
+            color: #4a5568;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-bottom: 2px solid #edf2f7;
+            padding-bottom: 0.8rem;
+        }
+
+        /* Form Styling */
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        input[type="text"] {
+            padding: 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 1rem;
+            background-color: #f8fafc;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4299e1;
+            background-color: #fff;
+            box-shadow: 0 0 0 4px rgba(66, 153, 225, 0.15);
+        }
+
+        input[type="submit"] {
+            padding: 1rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-top: 0.5rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(118, 75, 162, 0.2);
+        }
+
+        input[type="submit"]:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(118, 75, 162, 0.3);
+        }
+        
+        input[type="submit"]:active {
+            transform: scale(0.98);
+        }
+
+        /* Output Area */
+        .json-output {
+            margin-top: 1.5rem;
+        }
+
+        #jsonOutput {
+            background-color: #1a202c;
+            color: #48bb78;
+            padding: 1.2rem;
+            border-radius: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            min-height: 50px;
+            margin-top: 1rem;
+            border: 1px solid #2d3748;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 標題 -->
+        <h1>Fetch POST Demo</h1>
+        <div class="json-output">
+            <h3>JSON 資料格式</h3>
+            <!-- 表單：用於收集使用者輸入資料 -->
+            <form id="formElem">
+                <input type="text" name="name" value="John" placeholder="Name">
+                <input type="text" name="surname" value="Smith" placeholder="Surname">
+                <input type="text" name="age" value="15" placeholder="Age">
+                <input type="submit" value="Submit">
+            </form>
+            <!-- 顯示結果的區域 -->
+            <pre id="jsonOutput"></pre>
+        </div>
+    </div>
+
+    <script>
+        // 設定表單提交事件的處理函式
+        async function f_test(){
+            // 當表單 (id="formElem") 被提交時觸發
+            formElem.onsubmit = async (e) => {
+                // 阻止表單的預設提交行為 (避免頁面重新整理)
+                e.preventDefault();
+
+                const submitBtn = formElem.querySelector('input[type="submit"]');
+                const originalValue = submitBtn.value;
+                submitBtn.disabled = true;
+                submitBtn.value = 'Sending...';
+                submitBtn.style.cursor = 'not-allowed'; // Optional: visual feedback for disabled state
+
+                try {
+                    // 使用 fetch 發送 POST 請求
+                    // 注意：若 httpcan.org 無法連線，可嘗試改用 'https://httpbin.org/post'
+                    let response = await fetch('https://httpbin.org/post', {
+                        method: 'POST', // 指定 HTTP 方法為 POST
+                        // 使用 FormData 自動將表單資料編碼為 multipart/form-data
+                        body: new FormData(formElem)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    // 解析伺服器回傳的 JSON 資料
+                    let result = await response.json();
+
+                    // 在控制台輸出結果
+                    console.log(result);
+                    
+                    // 顯示結果在 UI 上
+                    document.getElementById('jsonOutput').textContent = JSON.stringify(result, null, 2);
+                    document.getElementById('jsonOutput').style.color = '#48bb78'; // Restore green color for success
+                } catch (err) {
+                    console.error('Fetch error:', err);
+                    document.getElementById('jsonOutput').textContent = 'Error: ' + err.message;
+                    document.getElementById('jsonOutput').style.color = '#e53e3e'; // Red color for error
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.value = originalValue;
+                    submitBtn.style.cursor = 'pointer';
+                }
+            };
+        }
+        // 呼叫函式以綁定事件監聽器
+        f_test()
+    </script>
+</body>
+</html>
