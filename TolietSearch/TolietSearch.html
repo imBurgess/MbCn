@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>附近公廁地圖</title>
+
+    <!-- Pixel font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Leaflet -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+
+    <style>
+      :root {
+        /* Pixel palette */
+        --bg: #0b1020;
+        --panel: #0f1a33;
+        --panel2: #0b1430;
+        --text: #e8f0ff;
+        --muted: #a7b4d6;
+        --line: #25345d;
+
+        --accent: #43ffb7; /* neon green */
+        --accent2: #7aa7ff; /* cyan-blue */
+        --danger: #ff4d6d; /* pink-red */
+
+        --shadow: #000000;
+        --radius: 0px; /* Pixel: keep sharp edges */
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        background: var(--bg);
+        font-family: "Press Start 2P", system-ui, -apple-system, "Noto Sans TC",
+          sans-serif;
+        display: flex;
+        flex-direction: column;
+
+        /* pixel grid background */
+        background-image: linear-gradient(
+            to right,
+            rgba(255, 255, 255, 0.05) 1px,
+            transparent 1px
+          ),
+          linear-gradient(
+            to bottom,
+            rgba(255, 255, 255, 0.05) 1px,
+            transparent 1px
+          ),
+          radial-gradient(
+            900px 500px at 20% -10%,
+            rgba(67, 255, 183, 0.18),
+            transparent 55%
+          ),
+          radial-gradient(
+            900px 500px at 90% 0%,
+            rgba(122, 167, 255, 0.16),
+            transparent 55%
+          );
+        background-size: 16px 16px, 16px 16px, auto, auto;
+      }
+
+      /* subtle scanlines */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0.18) 0px,
+          rgba(0, 0, 0, 0.18) 1px,
+          transparent 1px,
+          transparent 4px
+        );
+        mix-blend-mode: multiply;
+        opacity: 0.35;
+      }
+
+      /* ===== Pixel utility: pixel border ===== */
+      .px-box {
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.06),
+          rgba(0, 0, 0, 0.12)
+        );
+        border: 2px solid var(--line);
+        box-shadow: 0 0 0 2px #000, 4px 4px 0 0 #000;
+      }
+
+      /* ===== Top Bar (HUD) ===== */
+      .bar {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+
+        padding: 10px 12px;
+        background: var(--panel);
+        border-bottom: 2px solid var(--line);
+        box-shadow: 0 0 0 2px #000, 0 6px 0 #000;
+      }
+
+      .bar .hint {
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.5px;
+      }
+
+      /* ===== Pixel Button ===== */
+      button {
+        appearance: none;
+        cursor: pointer;
+        border: 2px solid var(--accent);
+        background: var(--panel2);
+        color: var(--accent);
+        padding: 10px 12px;
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.5px;
+
+        box-shadow: 0 0 0 2px #000, 4px 4px 0 0 #000;
+        transition: transform 0.05s linear, filter 0.15s ease;
+      }
+
+      button:hover {
+        filter: brightness(1.15);
+      }
+      button:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0 0 0 2px #000, 2px 2px 0 0 #000;
+      }
+
+      /* ===== Pixel Input ===== */
+      input {
+        width: 140px;
+        padding: 10px 10px;
+        font-size: 10px;
+        color: var(--text);
+        background: var(--panel2);
+        border: 2px solid var(--line);
+        outline: none;
+
+        box-shadow: 0 0 0 2px #000, 4px 4px 0 0 #000;
+      }
+
+      input:focus {
+        border-color: var(--accent2);
+        box-shadow: 0 0 0 2px #000, 4px 4px 0 0 #000,
+          0 0 0 4px rgba(122, 167, 255, 0.25);
+      }
+
+      /* ===== Status pill (HUD) ===== */
+      #status.hint {
+        margin-left: auto;
+        padding: 10px 10px;
+        font-size: 10px;
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.25);
+        border: 2px solid var(--line);
+        box-shadow: 0 0 0 2px #000, 4px 4px 0 0 #000;
+      }
+
+      /* ===== Map ===== */
+      #map {
+        flex: 1;
+        min-height: 260px;
+        outline: 2px solid #000;
+        border-top: 2px solid var(--line);
+        border-bottom: 2px solid var(--line);
+      }
+
+      /* (Optional) make tiles look more "pixelated" (may look rough) */
+      .leaflet-tile {
+        image-rendering: pixelated;
+      }
+
+      /* ===== Bottom Panel ===== */
+      #panel {
+        background: var(--panel);
+        border-top: 2px solid var(--line);
+        box-shadow: 0 0 0 2px #000, 0 -6px 0 #000;
+        padding: 10px 10px 12px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 4px 10px;
+      }
+
+      .panel-head .title {
+        font-size: 12px;
+        color: var(--accent2);
+        text-shadow: 2px 2px 0 #000;
+        letter-spacing: 1px;
+      }
+
+      #count.hint {
+        font-size: 10px;
+        color: var(--muted);
+        padding: 8px 10px;
+        border: 2px solid var(--line);
+        background: rgba(0, 0, 0, 0.25);
+        box-shadow: 0 0 0 2px #000, 4px 4px 0 0 #000;
+      }
+
+      /* ===== List ===== */
+      .list {
+        max-height: 280px;
+        overflow: auto;
+        display: grid;
+        gap: 10px;
+        padding: 6px;
+      }
+
+      /* Pixel card item */
+      .item {
+        background: var(--panel2);
+        border: 2px solid var(--line);
+        box-shadow: 0 0 0 2px #000, 4px 4px 0 0 #000;
+        padding: 12px 12px;
+        cursor: pointer;
+        transition: transform 0.05s linear, filter 0.15s ease;
+      }
+
+      .item:hover {
+        filter: brightness(1.12);
+      }
+      .item:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0 0 0 2px #000, 2px 2px 0 0 #000;
+      }
+
+      .item .name {
+        font-size: 11px;
+        color: var(--accent);
+        margin-bottom: 8px;
+        text-shadow: 2px 2px 0 #000;
+      }
+
+      .item .meta {
+        font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      /* Pixel scrollbar */
+      .list::-webkit-scrollbar {
+        width: 12px;
+      }
+      .list::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.25);
+        border-left: 2px solid #000;
+      }
+      .list::-webkit-scrollbar-thumb {
+        background: linear-gradient(
+          180deg,
+          rgba(67, 255, 183, 0.65),
+          rgba(122, 167, 255, 0.65)
+        );
+        border: 2px solid #000;
+      }
+
+      /* ===== Leaflet Controls Pixel Style ===== */
+      .leaflet-control-zoom a {
+        background: var(--panel2) !important;
+        color: var(--text) !important;
+        border: 2px solid var(--line) !important;
+        box-shadow: 0 0 0 2px #000, 3px 3px 0 0 #000 !important;
+        border-radius: 0 !important;
+      }
+      .leaflet-control-zoom a:hover {
+        filter: brightness(1.15);
+      }
+
+      /* ===== Popup Pixel Style ===== */
+      .leaflet-popup-content-wrapper {
+        border-radius: 0 !important;
+        background: var(--panel2) !important;
+        color: var(--text) !important;
+        border: 2px solid var(--line);
+        box-shadow: 0 0 0 2px #000, 4px 4px 0 0 #000;
+      }
+      .leaflet-popup-tip {
+        background: var(--panel2) !important;
+        border: 2px solid #000;
+      }
+      .leaflet-popup-content {
+        margin: 10px 12px;
+        font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .leaflet-container a.leaflet-popup-close-button {
+        color: var(--accent) !important;
+      }
+
+      /* ===== RWD ===== */
+      @media (max-width: 520px) {
+        .bar {
+          gap: 8px;
+        }
+        button,
+        input,
+        #status.hint {
+          width: 100%;
+        }
+        #status.hint {
+          margin-left: 0;
+          text-align: center;
+        }
+        .list {
+          max-height: 240px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="bar">
+      <button id="btnLocate">我想上廁所 !!!</button>
+      <label class="hint">搜尋半徑(km)</label>
+      <input id="radiusKm" type="number" min="0.1" step="0.1" value="2" />
+      <span id="status" class="hint"></span>
+    </div>
+
+    <div id="map"></div>
+
+    <div id="panel">
+      <div class="panel-head">
+        <div class="title">附近公廁</div>
+        <div id="count" class="hint"></div>
+      </div>
+      <div id="list" class="list"></div>
+    </div>
+
+    <!-- Leaflet -->
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+
+    <script>
+      // 1) MOENV API Key
+      const MOENV_API_KEY = "41f4bb5d-a698-489c-89f9-4bf8b2552d95";
+      // 2) dataset id
+      const DATA_ID = "fac_p_07";
+
+      // DOM
+      const $ = (sel) => document.querySelector(sel);
+      const setStatus = (msg) => ($("#status").textContent = msg || "");
+      const listEl = $("#list");
+      const countEl = $("#count");
+
+      // 3) 地圖初始化
+      const map = L.map("map", { zoomControl: true }).setView(
+        [24.1477, 120.6736],
+        13
+      );
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      const markersLayer = L.layerGroup().addTo(map);
+      let userMarker = null;
+
+      // 我的定位：紅色箭頭 SVG icon
+      const userArrowIcon = L.divIcon({
+        className: "",
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+        html: `
+          <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 4 L48 44 L32 36 L16 44 Z" fill="#ff4d6d" stroke="#000" stroke-width="3"/>
+            <circle cx="32" cy="48" r="10" fill="#ff4d6d" stroke="#000" stroke-width="3"/>
+          </svg>
+        `,
+      });
+
+      // Haversine 距離（公尺）
+      function distanceMeters(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const toRad = (d) => (d * Math.PI) / 180;
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(toRad(lat1)) *
+            Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) ** 2;
+        return 2 * R * Math.asin(Math.sqrt(a));
+      }
+
+      async function fetchToilets() {
+        if (!MOENV_API_KEY) throw new Error("你還沒填 MOENV_API_KEY");
+
+        const url =
+          `https://data.moenv.gov.tw/api/v2/${DATA_ID}` +
+          `?limit=1000&offset=0&api_key=${encodeURIComponent(MOENV_API_KEY)}`;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`API 失敗：${res.status}`);
+        return await res.json();
+      }
+
+      function clearMarkers() {
+        markersLayer.clearLayers();
+        if (userMarker) userMarker.addTo(markersLayer);
+      }
+
+      function renderList(items) {
+        countEl.textContent = `共 ${items.length} 筆`;
+        listEl.innerHTML = items
+          .map(
+            (x, i) => `
+          <div class="item" data-idx="${i}">
+            <div class="name">${x.name}</div>
+            <div class="meta">
+              ${x.addr || ""}<br/>
+              距離：${Math.round(x.distance)} 公尺
+            </div>
+          </div>
+        `
+          )
+          .join("");
+
+        listEl.querySelectorAll(".item").forEach((el) => {
+          el.addEventListener("click", () => {
+            const idx = Number(el.dataset.idx);
+            const it = items[idx];
+            map.setView([it.lat, it.lng], 17, { animate: true });
+            it.marker.openPopup();
+          });
+        });
+      }
+
+      async function run() {
+        setStatus("定位中...");
+
+        if (!navigator.geolocation) {
+          alert("此瀏覽器不支援定位");
+          return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const userLat = pos.coords.latitude;
+            const userLng = pos.coords.longitude;
+
+            map.setView([userLat, userLng], 15);
+            userMarker = L.marker([userLat, userLng], { icon: userArrowIcon })
+              .bindPopup("你在這裡")
+              .openPopup();
+
+            clearMarkers();
+
+            try {
+              setStatus("載入公廁資料中...");
+
+              const data = await fetchToilets();
+              const records = data.records || data.result || [];
+
+              const radiusKm = parseFloat($("#radiusKm").value || "2");
+              const radiusM = radiusKm * 1000;
+
+              const toiletItems = [];
+
+              for (const r of records) {
+                const lat = parseFloat(r.latitude ?? r.Latitude);
+                const lng = parseFloat(r.longitude ?? r.Longitude);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+                const d = distanceMeters(userLat, userLng, lat, lng);
+                if (d > radiusM) continue;
+
+                const name = r.name ?? r.Name ?? "公廁";
+                const addr = r.address ?? r.Address ?? "";
+
+                const marker = L.marker([lat, lng])
+                  .bindPopup(
+                    `<b>${name}</b><br/>${addr}<br/>距離：${Math.round(d)} 公尺`
+                  )
+                  .addTo(markersLayer);
+
+                toiletItems.push({ name, addr, lat, lng, distance: d, marker });
+              }
+
+              toiletItems.sort((a, b) => a.distance - b.distance);
+              renderList(toiletItems);
+
+              setStatus(
+                `完成：顯示半徑 ${radiusKm}km 內公廁 ${toiletItems.length} 筆`
+              );
+            } catch (e) {
+              console.error(e);
+              alert("載入失敗：\n" + (e?.message || e));
+              setStatus("載入失敗");
+              countEl.textContent = "";
+              listEl.innerHTML = "";
+            }
+          },
+          (err) => {
+            alert("定位失敗：\n" + err.message);
+            setStatus("定位失敗");
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+      }
+
+      $("#btnLocate").addEventListener("click", run);
+    </script>
+  </body>
+</html>
