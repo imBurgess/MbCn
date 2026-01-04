@@ -369,176 +369,185 @@
       crossorigin=""
     ></script>
 
-    <script>
-      // 1) MOENV API Key
-      const MOENV_API_KEY = "41f4bb5d-a698-489c-89f9-4bf8b2552d95";
-      // 2) dataset id
-      const DATA_ID = "fac_p_07";
+<script>
 
-      // DOM
-      const $ = (sel) => document.querySelector(sel);
-      const setStatus = (msg) => ($("#status").textContent = msg || "");
-      const listEl = $("#list");
-      const countEl = $("#count");
+  // 1. 全域變數與地圖初始化
+  const $ = (sel) => document.querySelector(sel);
+  const listEl = $("#list");
+  const countEl = $("#count");
+  const setStatus = (msg) => ($("#status").textContent = msg || "");
 
-      // 3) 地圖初始化
-      const map = L.map("map", { zoomControl: true }).setView(
-        [24.1477, 120.6736],
-        13
-      );
+  // MOENV API 設定
+  const MOENV_API_KEY = "41f4bb5d-a698-489c-89f9-4bf8b2552d95";
+  const DATA_ID = "fac_p_07";
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-      }).addTo(map);
+  // Leaflet 地圖初始化
+  const map = L.map("map", { zoomControl: true }).setView([24.1477, 120.6736], 13);
+  
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors",
+  }).addTo(map);
 
-      const markersLayer = L.layerGroup().addTo(map);
-      let userMarker = null;
+  const markersLayer = L.layerGroup().addTo(map);
+  let userMarker = null;
 
-      // 我的定位：紅色箭頭 SVG icon
-      const userArrowIcon = L.divIcon({
-        className: "",
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
-        html: `
-          <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true">
-            <path d="M32 4 L48 44 L32 36 L16 44 Z" fill="#ff4d6d" stroke="#000" stroke-width="3"/>
-            <circle cx="32" cy="48" r="10" fill="#ff4d6d" stroke="#000" stroke-width="3"/>
-          </svg>
-        `,
-      });
+  // 定義「我的位置」紅色箭頭圖示
+  const userArrowIcon = L.divIcon({
+    className: "",
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    html: `
+      <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M32 4 L48 44 L32 36 L16 44 Z" fill="#ff4d6d" stroke="#000" stroke-width="3"/>
+        <circle cx="32" cy="48" r="10" fill="#ff4d6d" stroke="#000" stroke-width="3"/>
+      </svg>
+    `,
+  });
 
-      // Haversine 距離（公尺）
-      function distanceMeters(lat1, lon1, lat2, lon2) {
-        const R = 6371000;
-        const toRad = (d) => (d * Math.PI) / 180;
-        const dLat = toRad(lat2 - lat1);
-        const dLon = toRad(lon2 - lon1);
-        const a =
-          Math.sin(dLat / 2) ** 2 +
-          Math.cos(toRad(lat1)) *
-            Math.cos(toRad(lat2)) *
-            Math.sin(dLon / 2) ** 2;
-        return 2 * R * Math.asin(Math.sqrt(a));
-      }
 
-      async function fetchToilets() {
-        if (!MOENV_API_KEY) throw new Error("你還沒填 MOENV_API_KEY");
+  // 2. 核心工具函式 (邏輯計算)
 
-        const url =
-          `https://data.moenv.gov.tw/api/v2/${DATA_ID}` +
-          `?limit=1000&offset=0&api_key=${encodeURIComponent(MOENV_API_KEY)}`;
+  // Haversine 公式：計算兩點經緯度間的距離 (公尺)
+  function distanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // 地球半徑
+    const toRad = (d) => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
 
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`API 失敗：${res.status}`);
-        return await res.json();
-      }
+  // 清除地圖上所有標記 (保留使用者位置)
+  function clearMarkers() {
+    markersLayer.clearLayers();
+    if (userMarker) userMarker.addTo(markersLayer);
+  }
 
-      function clearMarkers() {
-        markersLayer.clearLayers();
-        if (userMarker) userMarker.addTo(markersLayer);
-      }
 
-      function renderList(items) {
-        countEl.textContent = `共 ${items.length} 筆`;
-        listEl.innerHTML = items
-          .map(
-            (x, i) => `
-          <div class="item" data-idx="${i}">
-            <div class="name">${x.name}</div>
-            <div class="meta">
-              ${x.addr || ""}<br/>
-              距離：${Math.round(x.distance)} 公尺
-            </div>
+  // 3. API 資料串接
+
+  async function fetchToilets() {
+    if (!MOENV_API_KEY) throw new Error("尚未填寫 API Key");
+
+    const url = `https://data.moenv.gov.tw/api/v2/${DATA_ID}?limit=1000&offset=0&api_key=${encodeURIComponent(MOENV_API_KEY)}`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`API 請求失敗：${res.status}`);
+    return await res.json();
+  }
+
+
+  // 4. UI 畫面渲染 (列表與互動)
+
+  function renderList(items) {
+    countEl.textContent = `共 ${items.length} 筆`;
+    
+    // 生成列表 HTML
+    listEl.innerHTML = items
+      .map((x, i) => `
+        <div class="item" data-idx="${i}">
+          <div class="name">${x.name}</div>
+          <div class="meta">
+            ${x.addr || ""}<br/>
+            距離：${Math.round(x.distance)} 公尺
           </div>
-        `
-          )
-          .join("");
+        </div>
+      `).join("");
 
-        listEl.querySelectorAll(".item").forEach((el) => {
-          el.addEventListener("click", () => {
-            const idx = Number(el.dataset.idx);
-            const it = items[idx];
-            map.setView([it.lat, it.lng], 17, { animate: true });
-            it.marker.openPopup();
-          });
-        });
-      }
+    // 綁定列表點擊事件：點擊後地圖移動至該位置並開啟氣泡框
+    listEl.querySelectorAll(".item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const idx = Number(el.dataset.idx);
+        const it = items[idx];
+        map.setView([it.lat, it.lng], 17, { animate: true });
+        it.marker.openPopup();
+      });
+    });
+  }
 
-      async function run() {
-        setStatus("定位中...");
 
-        if (!navigator.geolocation) {
-          alert("此瀏覽器不支援定位");
-          return;
+  // 5. 主程式流程 (啟動與定位)
+
+  async function run() {
+    setStatus("定位中...");
+
+    if (!navigator.geolocation) {
+      alert("此瀏覽器不支援定位功能");
+      return;
+    }
+
+    // 呼叫瀏覽器定位
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const userLat = pos.coords.latitude;
+        const userLng = pos.coords.longitude;
+
+        // 更新使用者在地圖上的標記
+        map.setView([userLat, userLng], 15);
+        userMarker = L.marker([userLat, userLng], { icon: userArrowIcon })
+          .bindPopup("你在這裡")
+          .openPopup();
+
+        clearMarkers();
+
+        try {
+          setStatus("載入公廁資料中...");
+          const data = await fetchToilets();
+          const records = data.records || data.result || [];
+
+          // 取得使用者設定的搜尋半徑
+          const radiusKm = parseFloat($("#radiusKm").value || "2");
+          const radiusM = radiusKm * 1000;
+          const toiletItems = [];
+
+          // 過濾並建立標記
+          for (const r of records) {
+            const lat = parseFloat(r.latitude ?? r.Latitude);
+            const lng = parseFloat(r.longitude ?? r.Longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+            const d = distanceMeters(userLat, userLng, lat, lng);
+            if (d > radiusM) continue; // 超出範圍則跳過
+
+            const name = r.name ?? r.Name ?? "公廁";
+            const addr = r.address ?? r.Address ?? "";
+
+            const marker = L.marker([lat, lng])
+              .bindPopup(`<b>${name}</b><br/>${addr}<br/>距離：${Math.round(d)} 公尺`)
+              .addTo(markersLayer);
+
+            toiletItems.push({ name, addr, lat, lng, distance: d, marker });
+          }
+
+          // 依距離排序並渲染
+          toiletItems.sort((a, b) => a.distance - b.distance);
+          renderList(toiletItems);
+
+          setStatus(`完成：顯示半徑 ${radiusKm}km 內共 ${toiletItems.length} 筆`);
+        } catch (e) {
+          console.error(e);
+          alert("載入失敗：\n" + (e?.message || e));
+          setStatus("載入失敗");
+          countEl.textContent = "";
+          listEl.innerHTML = "";
         }
+      },
+      (err) => {
+        alert("定位失敗：\n" + err.message);
+        setStatus("定位失敗");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  }
 
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const userLat = pos.coords.latitude;
-            const userLng = pos.coords.longitude;
+  // 監聽按鈕點擊
+  $("#btnLocate").addEventListener("click", run);
 
-            map.setView([userLat, userLng], 15);
-            userMarker = L.marker([userLat, userLng], { icon: userArrowIcon })
-              .bindPopup("你在這裡")
-              .openPopup();
-
-            clearMarkers();
-
-            try {
-              setStatus("載入公廁資料中...");
-
-              const data = await fetchToilets();
-              const records = data.records || data.result || [];
-
-              const radiusKm = parseFloat($("#radiusKm").value || "2");
-              const radiusM = radiusKm * 1000;
-
-              const toiletItems = [];
-
-              for (const r of records) {
-                const lat = parseFloat(r.latitude ?? r.Latitude);
-                const lng = parseFloat(r.longitude ?? r.Longitude);
-                if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-
-                const d = distanceMeters(userLat, userLng, lat, lng);
-                if (d > radiusM) continue;
-
-                const name = r.name ?? r.Name ?? "公廁";
-                const addr = r.address ?? r.Address ?? "";
-
-                const marker = L.marker([lat, lng])
-                  .bindPopup(
-                    `<b>${name}</b><br/>${addr}<br/>距離：${Math.round(d)} 公尺`
-                  )
-                  .addTo(markersLayer);
-
-                toiletItems.push({ name, addr, lat, lng, distance: d, marker });
-              }
-
-              toiletItems.sort((a, b) => a.distance - b.distance);
-              renderList(toiletItems);
-
-              setStatus(
-                `完成：顯示半徑 ${radiusKm}km 內公廁 ${toiletItems.length} 筆`
-              );
-            } catch (e) {
-              console.error(e);
-              alert("載入失敗：\n" + (e?.message || e));
-              setStatus("載入失敗");
-              countEl.textContent = "";
-              listEl.innerHTML = "";
-            }
-          },
-          (err) => {
-            alert("定位失敗：\n" + err.message);
-            setStatus("定位失敗");
-          },
-          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-        );
-      }
-
-      $("#btnLocate").addEventListener("click", run);
-    </script>
+</script>
   </body>
 </html>
